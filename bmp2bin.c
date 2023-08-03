@@ -80,6 +80,11 @@ int main(int argc, char *argv[])
 	printf("colorUsed:	  %d\n", infoHeader.colorsUsed);
 	printf("importantColors:  %d\n", infoHeader.importantColors);
 
+	if(infoHeader.bitsPerPixel > 1) {
+		printf("only support 1 bit color\n");
+		return 0;
+	}
+
 	bytesPerRow = ((infoHeader.bitsPerPixel * infoHeader.width + 31) / FORE_BYTES_TO_BITS) * FORE_BYTES_ALIGN;
 
 	printf("\n%d bytes needed per one row\n\n", bytesPerRow);
