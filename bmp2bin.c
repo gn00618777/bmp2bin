@@ -4,6 +4,7 @@
 #include<string.h>
 #define FORE_BYTES_TO_BITS	(32)
 #define FORE_BYTES_ALIGN	(4)
+#define BITS_PER_BYTE		(8)
 //BMP file header structure
 #pragma pack(1)
 typedef struct {		//header size 14 byte
@@ -38,9 +39,9 @@ static void usage()
 }
 int main(int argc, char *argv[])
 {
-	FILE *file;
+	FILE *file = NULL;
 	unsigned char *imgData = NULL;
-	int bytesPerRow = 0, i = 0, j = 0, k = 0;
+	int bytesPerRow = 0, bytesPerPixel = 0, i = 0, j = 0, k = 0;
 	BMPFileHeader fileHeader;
 	BMPInfoHeader infoHeader;
 
@@ -80,12 +81,13 @@ int main(int argc, char *argv[])
 	printf("colorUsed:	  %d\n", infoHeader.colorsUsed);
 	printf("importantColors:  %d\n", infoHeader.importantColors);
 
-	if(infoHeader.bitsPerPixel > 1) {
-		printf("only support 1 bit color\n");
-		return 0;
+	if(infoHeader.bitsPerPixel == 1) {
+		bytesPerRow = ((infoHeader.bitsPerPixel * infoHeader.width + 31) / FORE_BYTES_TO_BITS) * FORE_BYTES_ALIGN;
+	} else if(infoHeader.bitsPerPixel == 24 || infoHeader.bitsPerPixel == 32) {
+		bytesPerPixel = infoHeader.bitsPerPixel / BITS_PER_BYTE;
+		bytesPerRow = (bytesPerPixel * infoHeader.width) + \
+				((bytesPerPixel * infoHeader.width) % FORE_BYTES_ALIGN); //+ align byte
 	}
-
-	bytesPerRow = ((infoHeader.bitsPerPixel * infoHeader.width + 31) / FORE_BYTES_TO_BITS) * FORE_BYTES_ALIGN;
 
 	printf("\n%d bytes needed per one row\n\n", bytesPerRow);
 
@@ -102,17 +104,32 @@ int main(int argc, char *argv[])
 		printf("0x%02X ", imgData[i]);
 	}
 
-	printf("\n\nlayout:\n");
-	unsigned int temp = 0;
-	unsigned int mask = 1;
-	for(i = 0 ; i < infoHeader.height ; i++) {
-		for(j = 0 ; j < bytesPerRow; j += FORE_BYTES_ALIGN) {
-			temp = (unsigned int)imgData[j];
-			for(k = 31 ; k >= 0 ; k--) {
-				temp >> k & mask ? printf("1 ") : printf("0 ");
+	printf("\n\n1bit layout:\n");
+
+	if(infoHeader.bitsPerPixel == 1) {
+		unsigned int temp = 0;
+		unsigned int mask = 1;
+		unsigned int lastByte = infoHeader.width / BITS_PER_BYTE;
+		//example: 6x8 bmp, width:6, it will be supplemented with 2 bits to make up 1 byte
+		//so we will right offset 2 bit to get real bit
+		unsigned int alignBits = BITS_PER_BYTE % infoHeader.width;
+		for(i = 0 ; i < infoHeader.height ; i++) {
+			for(j = 0 ; j <= lastByte; j += FORE_BYTES_ALIGN) {
+				temp = (unsigned int)imgData[j]; //4 bytes align
+				if(j == lastByte)
+					temp >>= alignBits;
+				for(k = (infoHeader.width - 1) ; k >= 0 ; k--) {
+					temp >> k & mask ? printf("1 ") : printf("0 ");
+				}
 			}
+			printf("\n");
 		}
-		printf("\n");
+	} else if(infoHeader.bitsPerPixel == 24 || infoHeader.bitsPerPixel == 32) {
+		for(i = 0 ; i < infoHeader.height ; i++) {
+			for(j = 0 ; j < bytesPerPixel * infoHeader.width ; j += bytesPerPixel)
+				imgData[j] == 0x00 ? printf("0 ") : printf("1 ");
+			printf("\n");
+		}
 	}
 
 	free(imgData);
